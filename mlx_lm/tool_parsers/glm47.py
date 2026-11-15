@@ -223,8 +223,13 @@ def parse_tool_call(text: str, tools: list[Any] | None = None):
     arg_dct = {}
     for match in _func_arg_regex.finditer(text):
         arg_key = match.group(1).strip()
-        arg_val = match.group(2).strip()
+        # The template writes values without padding, so whitespace is part of
+        # the value. Only strip to deserialize, and keep the raw text otherwise.
+        arg_val = match.group(2)
         if arg_key not in string_args:
-            arg_val = _deserialize(arg_val)
+            stripped = arg_val.strip()
+            parsed = _deserialize(stripped)
+            if parsed is not stripped:
+                arg_val = parsed
         arg_dct[arg_key] = arg_val
     return dict(name=func_name, arguments=arg_dct)

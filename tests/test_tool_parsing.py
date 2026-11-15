@@ -202,6 +202,61 @@ class TestToolParsing(unittest.TestCase):
             {"name": "get_weather", "arguments": {"postal_code": "123", "days": 3}},
         )
 
+    def test_glm47_preserves_string_whitespace(self):
+        tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": "write_file",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "path": {"type": "string"},
+                            "content": {"type": "string"},
+                            "mode": {"type": "integer"},
+                            "overwrite": {"type": "boolean"},
+                            "tags": {"type": "array"},
+                        },
+                    },
+                },
+            }
+        ]
+        # Whitespace inside the value tags is part of a string argument, other
+        # types are still stripped and deserialized.
+        test_case = (
+            "write_file"
+            "<arg_key>path</arg_key><arg_value>a.py</arg_value>"
+            "<arg_key>content</arg_key><arg_value>    return x\n</arg_value>"
+            "<arg_key>mode</arg_key><arg_value> 420 </arg_value>"
+            "<arg_key>overwrite</arg_key><arg_value> true </arg_value>"
+            '<arg_key>tags</arg_key><arg_value>\n["a", "b"]\n</arg_value>'
+        )
+        expected = {
+            "name": "write_file",
+            "arguments": {
+                "path": "a.py",
+                "content": "    return x\n",
+                "mode": 420,
+                "overwrite": True,
+                "tags": ["a", "b"],
+            },
+        }
+        self.assertEqual(glm47.parse_tool_call(test_case, tools), expected)
+
+        # Without a schema, a value that stays a string keeps its whitespace.
+        tool_call = glm47.parse_tool_call(test_case)
+        self.assertEqual(tool_call, expected)
+
+        test_case = (
+            "write_file"
+            '<arg_key>path</arg_key><arg_value> "a.py" </arg_value>'
+            "<arg_key>mode</arg_key><arg_value>\n420\n</arg_value>"
+        )
+        self.assertEqual(
+            glm47.parse_tool_call(test_case),
+            {"name": "write_file", "arguments": {"path": "a.py", "mode": 420}},
+        )
+
     def test_pythonic_single_quoted_args_with_commas(self):
         # LFM2.5 emits single-quoted strings; embedded commas must not truncate
         test_case = "[write(filePath='/tmp/hello.py', " "content='# Hello, world!')]"
